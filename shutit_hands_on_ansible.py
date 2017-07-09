@@ -107,12 +107,24 @@ end''')
 		ip = shutit.send_and_get_output('''vagrant landrush ls 2> /dev/null | grep -w ^''' + machines['ansibledb']['fqdn'] + ''' | awk '{print $2}' ''')
 		machines.get('ansibledb').update({'ip':ip})
 
-		for i in (1,2,3):
+		for i in (0,1,2):
 			shutit.login(command='vagrant ssh ' + sorted(machines.keys())[i])
 			shutit.login(command='sudo su -',password='vagrant')
 			shutit.install('ansible')
 			shutit.logout()
 			shutit.logout()
+
+		i = 2
+		shutit.login(command='vagrant ssh ' + sorted(machines.keys())[i])
+		shutit.login(command='sudo su -',password='vagrant')
+		shutit.install('gcc')
+		shutit.install('python-setuptools')
+		shutit.install('python-devel')
+		shutit.send('easy_install pip')
+		shutit.send('pip install ansible')
+		shutit.logout()
+		shutit.logout()
+
 		shutit.login(command='vagrant ssh ' + sorted(machines.keys())[1])
 		shutit.login(command='sudo su -',password='vagrant')
 		shutit.pause_point('ansible')
