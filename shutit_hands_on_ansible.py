@@ -59,7 +59,7 @@ fi
     end
   end
   config.vm.define "ansibleweb" do |ansibleweb|
-    ansibleweb.vm.box = "nrel/CentOS-6.5-x86_64"
+    ansibleweb.vm.box = "centos/7"
     ansibleweb.vm.hostname = "ansibleweb.vagrant.test"
     ansibleweb.vm.network "forwarded_port", guest: 80, host: 8080
     config.vm.provider :virtualbox do |vb|
@@ -67,7 +67,7 @@ fi
     end
   end
   config.vm.define "ansibledb" do |ansibledb|
-    ansibledb.vm.box = "nrel/CentOS-6.5-x86_64"
+    ansibledb.vm.box = "centos/7"
     ansibledb.vm.hostname = "ansibledb.vagrant.test"
     config.vm.provider :virtualbox do |vb|
       vb.name = "shutit_hands_on_ansible_db"
@@ -108,15 +108,33 @@ end''')
 		machines.get('ansibledb').update({'ip':ip})
 
 		for i in (0,1,2):
-			shutit.login(command='vagrant ssh ' + sorted(machines.keys())[i])
-			shutit.login(command='sudo su -',password='vagrant')
+			shutit.login(command='vagrant ssh ' + sorted(machines.keys())[i],check_sudo=False)
+			shutit.send('ssh-keygen',{'Enter':''})
+			shutit.login(command='sudo su -',password='vagrant',check_sudo=False)
 			shutit.install('ansible')
+			shutit.install('sshpass')
+			shutit.send('''sed -i 's/ChallengeResponseAuthentication no/ChallengeResponseAuthentication yes/g' /etc/ssh/sshd_config''')
+			shutit.send('service ssh restart || service sshd restart')
 			shutit.logout()
 			shutit.logout()
 
+		for i in (0,1,2):
+			shutit.login(command='vagrant ssh ' + sorted(machines.keys())[i],check_sudo=False)
+			for j in (0,1,2):
+				shutit.send('ssh-copy-id vagrant@' + machines[machines.keys()[j]]['ip'],{'ontinue':'yes','assword':'vagrant'})
+				shutit.send('ssh-copy-id vagrant@' + machines[machines.keys()[j]]['fqdn'],{'ontinue':'yes','assword':'vagrant'})
+				shutit.send('ssh-copy-id vagrant@' + machines.keys()[j],{'ontinue':'yes','assword':'vagrant'})
+				shutit.login('ssh-copy-id vagrant@' + machines[machines.keys()[j]]['ip'],password='vagrant',user='vagrant',check_sudo=False)
+				shutit.logout()
+				shutit.login('ssh-copy-id vagrant@' + machines[machines.keys()[j]]['fqdn'],password='vagrant',user='vagrant',check_sudo=False)
+				shutit.logout()
+				shutit.login('ssh-copy-id vagrant@' + machines.keys()[j],password='vagrant',user='vagrant',check_sudo=False)
+				shutit.logout()
+			shutit.logout()
+
 		i = 2
-		shutit.login(command='vagrant ssh ' + sorted(machines.keys())[i])
-		shutit.login(command='sudo su -',password='vagrant')
+		shutit.login(command='vagrant ssh ' + sorted(machines.keys())[i],check_sudo=False)
+		shutit.login(command='sudo su -',password='vagrant',check_sudo=False)
 		shutit.install('gcc')
 		shutit.install('python-setuptools')
 		shutit.install('python-devel')
@@ -125,10 +143,32 @@ end''')
 		shutit.logout()
 		shutit.logout()
 
-		shutit.login(command='vagrant ssh ' + sorted(machines.keys())[1])
-		shutit.login(command='sudo su -',password='vagrant')
-		shutit.pause_point('ansible')
-		shutit.logout()
+		shutit.login(command='vagrant ssh ' + sorted(machines.keys())[0],check_sudo=False)
+		shutit.send('mkdir exercise1')
+		shutit.send('cd exercise1')
+		shutit.send('touch inventory')
+		shutit.send('echo ' + str(machines['ansibleweb']['ip']) + ' >> inventory')
+		shutit.send('echo ' + str(machines['ansibledb']['ip']) + ' >> inventory')
+		shutit.send('ansible ' + str(machines['ansibleweb']['ip']) + ' -i inventory -u vagrant -m ping -k',{'SSH password:':'vagrant'})
+		shutit.send('ansible ' + str(machines['ansibleweb']['ip']) + ' -i inventory -u vagrant -m ping -k -vv',{'SSH password:':'vagrant'})
+		shutit.send('ansible ' + str(machines['ansibleweb']['ip']) + ' -i inventory -u vagrant -m ping -k -vvv',{'SSH password:':'vagrant'})
+
+		# not working yet?
+		#shutit.send('ansible all -i inventory -u vagrant -m command -a "/sbin/ifconfig"',{'SSH':'vagrant'})
+		# the same
+		#shutit.send('ansible all -i inventory -u vagrant -a "/sbin/ifconfig"',{'SSH':'vagrant'})
+		#shutit.send('ansible all -i inventory -u vagrant -m shell -a "/sbin/ifconfig"',{'SSH':'vagrant'})
+
+		shutit.send('cd ..')
+		shutit.send('mkdir exercise4.1')
+		shutit.send('cd exercise4.1')
+		shutit.send('touch inventory')
+		shutit.send('echo ' + str(machines['ansibleweb']['fqdn']) + ' ansible_ssh_user=vagrant ansible_ssh_pass=vagrant >> inventory')
+		shutit.send('ansible ' + str(machines['ansibleweb']['fqdn']) + ' -i inventory -m ping')
+		shutit.send('echo "[webservers]" >> inventory')
+		shutit.send('echo ' + str(machines['ansibleweb']['fqdn']) + ' >> inventory')
+
+		shutit.pause_point('ansible acs')
 		shutit.logout()
 
 		shutit.log('''Vagrantfile created in: ''' + shutit.build['this_vagrant_run_dir'],add_final_message=True,level=logging.DEBUG)
