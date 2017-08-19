@@ -124,12 +124,6 @@ end''')
 				shutit.send('ssh-copy-id vagrant@' + machines[machines.keys()[j]]['ip'],{'ontinue':'yes','assword':'vagrant'})
 				shutit.send('ssh-copy-id vagrant@' + machines[machines.keys()[j]]['fqdn'],{'ontinue':'yes','assword':'vagrant'})
 				shutit.send('ssh-copy-id vagrant@' + machines.keys()[j],{'ontinue':'yes','assword':'vagrant'})
-				shutit.login('ssh-copy-id vagrant@' + machines[machines.keys()[j]]['ip'],password='vagrant',user='vagrant',check_sudo=False)
-				shutit.logout()
-				shutit.login('ssh-copy-id vagrant@' + machines[machines.keys()[j]]['fqdn'],password='vagrant',user='vagrant',check_sudo=False)
-				shutit.logout()
-				shutit.login('ssh-copy-id vagrant@' + machines.keys()[j],password='vagrant',user='vagrant',check_sudo=False)
-				shutit.logout()
 			shutit.logout()
 
 		i = 2
@@ -167,8 +161,48 @@ end''')
 		shutit.send('ansible ' + str(machines['ansibleweb']['fqdn']) + ' -i inventory -m ping')
 		shutit.send('echo "[webservers]" >> inventory')
 		shutit.send('echo ' + str(machines['ansibleweb']['fqdn']) + ' >> inventory')
+		shutit.send('echo "[dbservers]" >> inventory')
+		shutit.send('echo ' + str(machines['ansibledb']['fqdn']) + ' >> inventory')
+		shutit.send('echo "[datacenter:children]" >> inventory')
+		shutit.send('echo "webservers" >> inventory')
+		shutit.send('echo "dbservers" >> inventory')
+		shutit.send('ansible datacenter -i inventory -m ping')
+		shutit.send('echo "[datacenter:vars]" >> inventory')
+		shutit.send('echo "ansible_ssh_user=vagrant" >> inventory')
+		shutit.send('echo "ansible_ssh_pass=vagrant" >> inventory')
+		shutit.send('ansible datacenter -i inventory -m ping')
 
-		shutit.pause_point('ansible acs')
+		shutit.send('cd ..')
+		shutit.send('mkdir exercise4.2')
+		shutit.send('cd exercise4.2')
+		shutit.send('mkdir -p {test,production}/{group_vars,host_vars}')
+		shutit.send('mkdir -p {test,production}/group_vars')
+		shutit.send('mkdir -p {test,production}/host_vars')
+		shutit.send('cp ../exercise4.1/inventory production/inventory_prod')
+		# all_username is just the username we are creating
+		shutit.send('''cat > production/group_vars/all << END
+---
+# This is our user
+username: all_username
+END''')
+		shutit.send('cd production')
+		# variable: {{username}}
+		shutit.send('ansible webservers -i inventory_prod -m user -a "name={{username}} password=12345" --sudo')
+		# group takes precedence over all
+		shutit.send('''cat > production/group_vars/webserver << END
+---
+# This is our group user
+username: group_user
+END''')
+		shutit.send('ansible webservers -i inventory_prod -m user -a "name={{username}} password=12345" --sudo')
+		# web1 takes precedence because we're running it on there. 
+		shutit.send('''cat > production/host_vars/web1 << END
+---
+# This is a comment
+username: web1_user
+END''')
+		shutit.send('ansible webservers -i inventory_prod -m user -a "name={{username}} password=12345" --sudo')
+		shutit.pause_point()
 		shutit.logout()
 
 		shutit.log('''Vagrantfile created in: ''' + shutit.build['this_vagrant_run_dir'],add_final_message=True,level=logging.DEBUG)
