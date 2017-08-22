@@ -202,6 +202,123 @@ END''')
 username: web1_user
 END''')
 		shutit.send('ansible webservers -i inventory_prod -m user -a "name={{username}} password=12345" --sudo')
+		
+		# Common settings settings
+		# First config file wins: $ANSIBLE_CONFIG, ./ansible.cfg, ~/.ansible.cfg, /etc/ansible/ansible.cfg
+		# forks - default 5, up for prod
+		# host_key_checking - default true, false for test
+		# log_path - default null, set to a path
+		# docs.ansible.com for more - getting started, configuration file
+		# eg:
+		# export ANSIBLE_HOST_KEY_CHECKING=True
+		# for host_key_checking
+
+		# Docs
+		#shutit.send('ansible-doc -l')
+		#shutit.send('ansible-doc -s ping')
+		#shutit.send('ansible-doc ping')
+		# = - means arg is required
+
+		# Significant modules:
+		# copy (can backup and validate)
+		# fetch (can use md5sums to validate)
+		# apt module, yum module
+		# service (for services)
+		shutit.send('cd ..')
+		shutit.send('mkdir exercise5.1')
+		shutit.send('cd exercise5.1')
+		shutit.send('''cat > inventory << END
+''' + str(machines['ansibleweb']['fqdn']) + ''' ansible_ssh_host=''' + str(machines['ansibleweb']['ip']) + ''' ansible_ssh_user=vagrant ansible_ssh_pass=vagrant username=ansible_user
+''' + str(machines['ansibledb']['fqdn']) + ''' ansible_ssh_host=''' + str(machines['ansibledb']['ip']) + '''
+[webservers]
+''' + str(machines['ansibleweb']['fqdn']) + '''
+
+[dbservers]
+''' + str(machines['ansibledb']['fqdn']) + '''
+
+[datacenter:children]
+webservers
+dbservers
+
+[datacenter:vars]
+ansible_ssh_user=vagrant
+ansible_ssh_pass=vagrant
+END''')
+		shutit.send('ansible webservers -i inventory -m yum -a "name=httpd state=present" --sudo')
+		shutit.send('ansible webservers -i inventory -m service -a "name=httpd enabled=yes state=started" --sudo')
+		shutit.send('ansible dbservers -i inventory -m yum -a "name=mysql-server state=present" --sudo')
+		shutit.send('ansible dbservers -i inventory -m service -a "name=mysqld state=started" --sudo')
+		# : groupa or groupb
+		# ! not
+		# web*.ex.com - glob
+		# regex also possible
+		# :& - intersection, eg webservers:&production
+		shutit.send('ansible webservers:dbservers -i inventory -m service -a "name=iptables state=stopped" --sudo')
+
+		# facts with 'setup'
+		shutit.send('ansible ' + str(machines['ansibleweb']['fqdn']) + ' -i inventory -m setup')
+		shutit.send('ansible ' + str(machines['ansibleweb']['fqdn']) + ' -i inventory -m setup -a "filter=ansible_mounts"')
+		shutit.send('ansible all -i inventory -m setup --tree')
+
+		# Playbooks
+		# plays map hosts to tasks
+		# plays can have multiple tasks
+		# playbooks have multiple plays
+
+		# eg play
+		# - hosts: webservers   ## 'global' section
+		# remote_user: root
+		# sudo: yes
+		# sudo_user: wordpress_user
+		# gather_facts: no
+		# tasks:  ## tasks run in order
+
+		# Run playbook:
+		# ansible-playbook playbook.yml
+
+		# When host fails, retry file created and is retried
+
+		shutit.send('cd ..')
+		shutit.send('mkdir -p exercise_6.1')
+		shutit.send('cd exercise_6.1')
+		shutit.send_file('ansible.cfg','''[defaults]
+hostfile = inventory''')
+		shutit.send('cp ../exercise_5.1/inventory .')
+		shutit.send('''cat > web_db.yaml << END
+---
+- hosts: webservers
+  sudo: yes
+
+  tasks:
+  - name: Ensure Apache installed
+    yum: name=httpd state=present
+  - name: Start apache
+    service: name=httpd enabled=yes state=started
+
+- hosts: dbservers
+  sudo: yes
+
+  tasks:
+  - name: Ensure MYSQL
+    yum: name=mysql-server state=present
+  - name: Start Mysql
+    service: name=mysqld state=started
+
+- hosts: webservers:dbservers
+  sudo: yes
+
+  tasks:
+  - name: Stop IPTAbles
+    service: name=iptables state=stopped
+END''')
+		shutit.send('ansible-playbook web_db.yaml')
+	
+		# You can include: a playbook, eg:
+		# tasks:
+		#   - include: wordpress.yml	
+        #     vars:
+		#     sitename: Site
+		#   - include: loadbalancer.yml
 		shutit.pause_point()
 		shutit.logout()
 
